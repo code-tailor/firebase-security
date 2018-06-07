@@ -2,9 +2,11 @@ package com.dw.fierbase.security.filter;
 
 import com.google.api.core.ApiFuture;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cache.Cache;
@@ -33,7 +35,7 @@ public class FirebaseAuthenticationFilter implements Filter {
   private static final String CACHE_FIREBASE_ID_TOKEN = "firebaseIdToken";
 
   private CacheManager cacheManager;
-  
+
   public FirebaseAuthenticationFilter(CacheManager cacheManager) {
     this.cacheManager = cacheManager;
   }
@@ -46,23 +48,42 @@ public class FirebaseAuthenticationFilter implements Filter {
   @Override
   public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
       throws IOException, ServletException {
-    logger.debug("doFilter:: athenticating...");
-
     HttpServletRequest httpRequest = (HttpServletRequest) request;
     String authToken = httpRequest.getHeader(TOKEN_HEADER);
+
     if (StringUtils.isBlank(authToken)) {
+      logger.debug("Missing authToken.");
       chain.doFilter(request, response);
       return;
     }
 
+    String obfuscatedToken = StringUtils.abbreviateMiddle(authToken, "...", 20);
+    HttpServletResponse httpResponse = (HttpServletResponse) response;
+
     try {
-      Authentication  authentication = getAndValidateAuthentication(authToken);
+      Authentication authentication = getAndValidateAuthentication(authToken);
       SecurityContextHolder.getContext().setAuthentication(authentication);
-      logger.debug("doFilter():: successfully authenticated.");
+
+      logger.debug("doFilter():: Successfully authenticated. authToken={}", obfuscatedToken);
     } catch (Exception ex) {
-      HttpServletResponse httpResponse = (HttpServletResponse) response;
+      // check root cuase is FirebaseAuthException
+      Throwable exception = ExceptionUtils.getRootCause(ex);
+      if (exception instanceof FirebaseAuthException) {
+        FirebaseAuthException firebaseAuthEx = (FirebaseAuthException) exception;
+        String errorCode = firebaseAuthEx.getErrorCode();
+
+        // Check error code is 'ERROR_INVALID_CREDENTIAL'
+        if (StringUtils.equals(errorCode, "ERROR_INVALID_CREDENTIAL")) {
+          // The supplied auth credential is malformed or has expired.
+          httpResponse.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+          logger.error("Authentication error for token={}.", obfuscatedToken, ex);
+          return;
+        }
+      }
+
       httpResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-      logger.debug("Fail to authenticate.", ex);
+      logger.debug("Invalid authentication. authToken={}.", obfuscatedToken, ex);
+      return;
     }
 
     chain.doFilter(request, response);
