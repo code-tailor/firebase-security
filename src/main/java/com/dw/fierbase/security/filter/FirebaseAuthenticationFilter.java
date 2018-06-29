@@ -74,8 +74,16 @@ public class FirebaseAuthenticationFilter implements Filter {
 
         // Check error code is 'ERROR_INVALID_CREDENTIAL'
         if (StringUtils.equals(errorCode, "ERROR_INVALID_CREDENTIAL")) {
-          // The supplied auth credential is malformed or has expired.
           httpResponse.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+          // Check if firebase token is expired
+          if (StringUtils.startsWith(exception.getMessage(),
+              "Firebase ID token has expired or is not yet valid")) {
+            logger.warn("Firebase ID token has expired or is not yet valid. token={}.",
+                obfuscatedToken, ex);
+            return;
+          }
+
+          // The supplied auth credential is malformed.
           logger.error("Authentication error for token={}.", obfuscatedToken, ex);
           return;
         }
