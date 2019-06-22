@@ -74,7 +74,7 @@ public class FirebaseAuthenticationFilter implements Filter {
 
         // Check error code is 'ERROR_INVALID_CREDENTIAL'
         if (StringUtils.equals(errorCode, "ERROR_INVALID_CREDENTIAL")) {
-          httpResponse.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+          httpResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
           // Check if firebase token is expired
           if (StringUtils.startsWith(exception.getMessage(),
               "Firebase ID token has expired or is not yet valid")) {
