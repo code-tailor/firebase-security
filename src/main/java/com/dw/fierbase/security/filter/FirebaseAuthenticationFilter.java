@@ -1,6 +1,8 @@
 package com.dw.fierbase.security.filter;
 
+import com.google.api.client.json.webtoken.JsonWebSignature;
 import com.google.api.core.ApiFuture;
+import com.google.firebase.FirebaseApp;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
@@ -66,6 +68,8 @@ public class FirebaseAuthenticationFilter implements Filter {
 
       logger.debug("doFilter():: Successfully authenticated. authToken={}", obfuscatedToken);
     } catch (Exception ex) {
+      String userDetail = getUserDetails(authToken);
+
       // check root cuase is FirebaseAuthException
       Throwable exception = ExceptionUtils.getRootCause(ex);
       if (exception instanceof FirebaseAuthException) {
@@ -78,19 +82,21 @@ public class FirebaseAuthenticationFilter implements Filter {
           // Check if firebase token is expired
           if (StringUtils.startsWith(exception.getMessage(),
               "Firebase ID token has expired or is not yet valid")) {
-            logger.warn("Firebase ID token has expired or is not yet valid. token={}.",
-                obfuscatedToken, ex);
+            logger.warn("Firebase ID token has expired or is not yet valid. token={}; "
+                + "userDetail={}.", obfuscatedToken, userDetail,ex);
             return;
           }
 
           // The supplied auth credential is malformed.
-          logger.error("Authentication error for token={}.", obfuscatedToken, ex);
+          logger.error("Authentication error for token={}; userDetail={}.", obfuscatedToken,
+              userDetail, ex);
           return;
         }
       }
 
       httpResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-      logger.debug("Invalid authentication. authToken={}.", obfuscatedToken, ex);
+      logger.debug("Invalid authentication. authToken={}; userDetail={}.", obfuscatedToken,
+          userDetail, ex);
       return;
     }
 
@@ -121,6 +127,18 @@ public class FirebaseAuthenticationFilter implements Filter {
     } catch (InterruptedException | ExecutionException ex) {
       throw ex;
     }
+  }
+
+  private String getUserDetails(String authToken) {
+    try {
+      JsonWebSignature jws = JsonWebSignature
+          .parser(FirebaseApp.getInstance().getOptions().getJsonFactory()).parse(authToken);
+      return jws.getPayload() == null ? null : jws.getPayload().toString();
+    } catch (Exception ex) {
+      logger.debug("Fail to extract token={}", authToken, ex);
+    }
+
+    return null;
   }
 
   @Override
