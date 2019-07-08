@@ -81,8 +81,8 @@ public class FirebaseAuthenticationFilter implements Filter {
           httpResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
           // Check if firebase token is expired
           if (StringUtils.startsWith(exception.getMessage(),
-              "Firebase ID token has expired or is not yet valid")) {
-            logger.warn("Firebase ID token has expired or is not yet valid. token={}; "
+              "Firebase ID token has expired or is not valid anymore")) {
+            logger.warn("Firebase ID token has expired or is not valid anymore. token={}; "
                 + "userDetail={}.", obfuscatedToken, userDetail,ex);
             return;
           }
